@@ -111,6 +111,20 @@ let dirFilter = 'all';
 let lastUpdated = null;
 let refreshTimer = null;
 
+function toPST(timeStr) {
+  try {
+    // Times in data are UTC (e.g. "May 25, 2026, 1:07 AM")
+    const d = new Date(timeStr + ' UTC');
+    if (isNaN(d)) return timeStr;
+    return d.toLocaleString('en-US', {
+      timeZone: 'America/Los_Angeles',
+      month: 'short', day: 'numeric', year: 'numeric',
+      hour: 'numeric', minute: '2-digit', hour12: true,
+      timeZoneName: 'short',
+    });
+  } catch { return timeStr; }
+}
+
 async function fetchData(manual = false) {
   const dot = document.getElementById('statusDot');
   dot.className = 'dot stale';
@@ -230,7 +244,7 @@ function render() {
     for (const m of gmsgs) {
       const sc = m.from === 'bob' ? 'bob' : m.from === 'rick' ? 'rick' : 'other';
       const init = (m.from||'B').charAt(0).toUpperCase();
-      const timeStr = m.time ? `<span class="msg-time">${m.time}</span>` : '';
+      const timeStr = m.time ? `<span class="msg-time">${toPST(m.time)}</span>` : '';
       const idStr = m.id ? `<div class="msg-id">#${m.id}</div>` : '';
       html += `
         <div class="msg-item">
