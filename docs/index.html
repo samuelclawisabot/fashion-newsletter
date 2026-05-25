@@ -102,7 +102,7 @@
 </div>
 
 <script>
-const DATA_URL = 'https://api.github.com/repos/samuelclawisabot/fashion-newsletter/contents/dashboard-data.json';
+const DATA_URL = 'https://raw.githubusercontent.com/samuelclawisabot/fashion-newsletter/main/dashboard-data.json';
 const REFRESH_INTERVAL = 30000; // 30 seconds
 
 let allMessages = [];
@@ -130,9 +130,7 @@ async function fetchData(manual = false) {
   dot.className = 'dot stale';
   try {
     // Use GitHub contents API — always returns latest, no CDN cache issues
-    const res = await fetch(DATA_URL + '?t=' + Date.now(), {
-      headers: { 'Accept': 'application/vnd.github.v3.raw' }
-    });
+    const res = await fetch(DATA_URL + '?v=' + Date.now());
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
 
