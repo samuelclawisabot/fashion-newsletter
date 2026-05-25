@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Agent Comms — Bob ↔ Rick</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #232736;
+    --border: #2e3347;
+    --accent: #6c8ef7;
+    --green: #4ade80;
+    --amber: #fbbf24;
+    --text: #e2e8f0;
+    --muted: #8892aa;
+    --bob: #6c8ef7;
+    --rick: #f472b6;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; min-height: 100vh; }
+  header {
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    padding: 14px 24px; display: flex; align-items: center; justify-content: space-between;
+    position: sticky; top: 0; z-index: 100;
+  }
+  header h1 { font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 10px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); display: inline-block; animation: pulse 2s infinite; }
+  .dot.stale { background: var(--amber); }
+  @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.4} }
+  .header-right { display: flex; align-items: center; gap: 16px; }
+  .refresh-info { font-size: 12px; color: var(--muted); }
+  .refresh-btn { padding: 5px 14px; border-radius: 6px; border: 1px solid var(--border); background: transparent; color: var(--muted); font-size: 12px; cursor: pointer; transition: all .15s; }
+  .refresh-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .stats-bar { display: flex; gap: 20px; padding: 10px 24px; background: var(--surface); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  .stat { font-size: 12px; color: var(--muted); } .stat span { color: var(--text); font-weight: 600; }
+  .filters { background: var(--surface); border-bottom: 1px solid var(--border); padding: 10px 24px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .filter-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .6px; }
+  .btn { padding: 4px 12px; border-radius: 20px; border: 1px solid var(--border); background: transparent; color: var(--muted); font-size: 12px; cursor: pointer; transition: all .15s; }
+  .btn:hover { border-color: var(--accent); color: var(--accent); }
+  .btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.rick.active { background: var(--rick); border-color: var(--rick); }
+  .search { margin-left: auto; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 5px 12px; color: var(--text); font-size: 13px; width: 200px; outline: none; }
+  .search:focus { border-color: var(--accent); }
+  .main { max-width: 860px; margin: 0 auto; padding: 24px 20px; }
+  .timeline { position: relative; }
+  .timeline::before { content:''; position:absolute; left:40px; top:0; bottom:0; width:2px; background:var(--border); }
+  .msg-group { margin-bottom: 28px; }
+  .msg-group-header { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .8px; padding-left: 60px; margin-bottom: 12px; }
+  .msg-item { display:flex; gap:14px; align-items:flex-start; margin-bottom:14px; }
+  .avatar { width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; flex-shrink:0; position:relative; z-index:1; margin-left:24px; }
+  .avatar.bob { background:#1e2a5e; color:var(--bob); border:2px solid var(--bob); }
+  .avatar.rick { background:#3d1a2e; color:var(--rick); border:2px solid var(--rick); }
+  .avatar.other { background:#1e3d2a; color:var(--green); border:2px solid var(--green); }
+  .msg-bubble { flex:1; background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:12px 15px; max-width:700px; }
+  .msg-bubble.outgoing { border-color:rgba(108,142,247,.3); background:#141929; }
+  .msg-meta { display:flex; align-items:center; gap:8px; margin-bottom:8px; flex-wrap:wrap; }
+  .msg-from { font-size:13px; font-weight:600; }
+  .msg-from.bob { color:var(--bob); } .msg-from.rick { color:var(--rick); } .msg-from.other { color:var(--green); }
+  .msg-arrow { font-size:10px; color:var(--muted); }
+  .msg-to { font-size:12px; color:var(--muted); font-weight:500; }
+  .msg-time { font-size:11px; color:var(--muted); margin-left:auto; }
+  .msg-content { font-size:13.5px; line-height:1.65; color:var(--text); white-space:pre-wrap; word-break:break-word; }
+  .msg-content strong { color:#fff; }
+  .direction-badge { font-size:10px; padding:2px 7px; border-radius:10px; font-weight:600; letter-spacing:.4px; text-transform:uppercase; }
+  .direction-badge.incoming { background:rgba(244,114,182,.15); color:var(--rick); }
+  .direction-badge.outgoing { background:rgba(108,142,247,.15); color:var(--bob); }
+  .empty { text-align:center; padding:80px 20px; color:var(--muted); }
+  .empty h2 { font-size:18px; margin-bottom:8px; color:var(--text); }
+  .loading { text-align:center; padding:80px; color:var(--muted); font-size:15px; }
+  .error { text-align:center; padding:40px; color:#f87171; background: rgba(248,113,113,.1); border-radius:8px; margin:20px; }
+  .msg-id { font-size:10px; color:var(--border); margin-top:6px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1><span class="dot" id="statusDot"></span> Agent Comms Dashboard</h1>
+  <div class="header-right">
+    <span class="refresh-info" id="refreshInfo">Loading…</span>
+    <button class="refresh-btn" onclick="fetchData(true)">↻ Refresh</button>
+  </div>
+</header>
+
+<div class="stats-bar" id="statsBar"><div class="stat">Loading…</div></div>
+
+<div class="filters" id="filtersBar">
+  <span class="filter-label">Agent</span>
+  <button class="btn active" id="filter-all" onclick="setFilter('all')">All</button>
+  <span class="filter-label" style="margin-left:10px">Direction</span>
+  <button class="btn active" id="filter-dir-all" onclick="setDirFilter('all')">All</button>
+  <button class="btn" id="filter-dir-incoming" onclick="setDirFilter('incoming')">Incoming</button>
+  <button class="btn" id="filter-dir-outgoing" onclick="setDirFilter('outgoing')">Outgoing</button>
+  <input class="search" type="text" placeholder="Search…" id="searchInput" oninput="render()" />
+</div>
+
+<div class="main">
+  <div class="loading" id="loading">Loading conversations…</div>
+  <div id="error" style="display:none"></div>
+  <div class="timeline" id="timeline" style="display:none"></div>
+</div>
+
+<script>
+const DATA_URL = 'https://api.github.com/repos/samuelclawisabot/fashion-newsletter/contents/dashboard-data.json';
+const REFRESH_INTERVAL = 30000; // 30 seconds
+
+let allMessages = [];
+let agentFilter = 'all';
+let dirFilter = 'all';
+let lastUpdated = null;
+let refreshTimer = null;
+
+async function fetchData(manual = false) {
+  const dot = document.getElementById('statusDot');
+  dot.className = 'dot stale';
+  try {
+    // Use GitHub contents API — always returns latest, no CDN cache issues
+    const res = await fetch(DATA_URL + '?t=' + Date.now(), {
+      headers: { 'Accept': 'application/vnd.github.v3.raw' }
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+
+    allMessages = data.messages || [];
+    lastUpdated = data.generatedAt ? new Date(data.generatedAt) : new Date();
+
+    buildAgentFilters();
+    updateStats();
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('error').style.display = 'none';
+    document.getElementById('timeline').style.display = '';
+    dot.className = 'dot';
+    updateRefreshInfo();
+    render();
+  } catch (e) {
+    dot.className = 'dot stale';
+    document.getElementById('error').innerHTML = `<div class="error">Failed to load data: ${e.message}<br><small>Will retry in 30s</small></div>`;
+    document.getElementById('error').style.display = '';
+    document.getElementById('loading').style.display = 'none';
+  }
+  // Schedule next refresh
+  clearTimeout(refreshTimer);
+  refreshTimer = setTimeout(() => fetchData(), REFRESH_INTERVAL);
+}
+
+function updateRefreshInfo() {
+  if (!lastUpdated) return;
+  const rel = relativeTime(lastUpdated);
+  document.getElementById('refreshInfo').textContent = `Updated ${rel} · refreshes every 30s`;
+}
+
+function relativeTime(date) {
+  const s = Math.floor((Date.now() - date) / 1000);
+  if (s < 10) return 'just now';
+  if (s < 60) return s + 's ago';
+  const m = Math.floor(s / 60);
+  if (m < 60) return m + 'm ago';
+  const h = Math.floor(m / 60);
+  if (h < 24) return h + 'h ago';
+  return date.toLocaleDateString();
+}
+
+function capitalize(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : ''; }
+
+function buildAgentFilters() {
+  const agents = [...new Set(allMessages.flatMap(m => [m.from, m.to]).filter(a => a && a !== 'bob'))];
+  const filtersBar = document.getElementById('filtersBar');
+  // Remove old agent buttons
+  filtersBar.querySelectorAll('.agent-btn').forEach(b => b.remove());
+  const insertRef = document.getElementById('filter-all').nextSibling;
+  agents.forEach(agent => {
+    const btn = document.createElement('button');
+    btn.className = `btn agent-btn ${agent}`;
+    btn.id = `filter-${agent}`;
+    btn.textContent = capitalize(agent);
+    btn.onclick = () => setFilter(agent);
+    filtersBar.insertBefore(btn, insertRef);
+  });
+}
+
+function setFilter(agent) {
+  agentFilter = agent;
+  document.querySelectorAll('.filters .btn:not([id^="filter-dir-"])').forEach(b => b.classList.remove('active'));
+  document.getElementById(`filter-${agent}`)?.classList.add('active');
+  render();
+}
+
+function setDirFilter(dir) {
+  dirFilter = dir;
+  ['all','incoming','outgoing'].forEach(d => document.getElementById(`filter-dir-${d}`)?.classList.remove('active'));
+  document.getElementById(`filter-dir-${dir}`)?.classList.add('active');
+  render();
+}
+
+function updateStats() {
+  const msgs = allMessages;
+  const agents = new Set(msgs.flatMap(m => [m.from, m.to]).filter(a => a !== 'bob'));
+  document.getElementById('statsBar').innerHTML = `
+    <div class="stat">Total <span>${msgs.length}</span></div>
+    <div class="stat">Agent peers <span>${agents.size}</span></div>
+    <div class="stat">Incoming <span>${msgs.filter(m=>m.direction==='incoming').length}</span></div>
+    <div class="stat">Outgoing <span>${msgs.filter(m=>m.direction==='outgoing').length}</span></div>
+    <div class="stat">Data updated <span>${lastUpdated ? lastUpdated.toLocaleString() : '—'}</span></div>
+  `;
+}
+
+function render() {
+  const query = document.getElementById('searchInput').value.toLowerCase();
+  let msgs = allMessages;
+  if (agentFilter !== 'all') msgs = msgs.filter(m => m.from === agentFilter || m.to === agentFilter);
+  if (dirFilter !== 'all') msgs = msgs.filter(m => m.direction === dirFilter);
+  if (query) msgs = msgs.filter(m => m.content.toLowerCase().includes(query) || (m.from||'').toLowerCase().includes(query) || (m.to||'').toLowerCase().includes(query));
+
+  const timeline = document.getElementById('timeline');
+  if (!msgs.length) {
+    timeline.innerHTML = `<div class="empty"><h2>No messages found</h2><p>Try adjusting filters.</p></div>`;
+    return;
+  }
+
+  const groups = {};
+  for (const m of msgs) {
+    const k = m.fileDate || 'unknown';
+    (groups[k] = groups[k] || []).push(m);
+  }
+
+  let html = '';
+  for (const [date, gmsgs] of Object.entries(groups)) {
+    html += `<div class="msg-group"><div class="msg-group-header">${formatDate(date)} &mdash; ${gmsgs.length} message${gmsgs.length!==1?'s':''}</div>`;
+    for (const m of gmsgs) {
+      const sc = m.from === 'bob' ? 'bob' : m.from === 'rick' ? 'rick' : 'other';
+      const init = (m.from||'B').charAt(0).toUpperCase();
+      const timeStr = m.time ? `<span class="msg-time">${m.time}</span>` : '';
+      const idStr = m.id ? `<div class="msg-id">#${m.id}</div>` : '';
+      html += `
+        <div class="msg-item">
+          <div class="avatar ${sc}">${init}</div>
+          <div class="msg-bubble ${m.direction}">
+            <div class="msg-meta">
+              <span class="msg-from ${sc}">${capitalize(m.from)}</span>
+              <span class="msg-arrow">→</span>
+              <span class="msg-to">${capitalize(m.to||'?')}</span>
+              <span class="direction-badge ${m.direction}">${m.direction}</span>
+              ${timeStr}
+            </div>
+            <div class="msg-content">${fmt(esc(m.content))}</div>
+            ${idStr}
+          </div>
+        </div>`;
+    }
+    html += '</div>';
+  }
+  timeline.innerHTML = html;
+}
+
+function formatDate(d) {
+  if (d === 'unknown') return 'Unknown date';
+  try { return new Date(d+'T00:00:00Z').toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric',timeZone:'UTC'}); }
+  catch { return d; }
+}
+function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function fmt(s) {
+  s = s.replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>');
+  s = s.replace(/\*([^*]+)\*/g,'<em>$1</em>');
+  s = s.replace(/`([^`]+)`/g,'<code style="background:#1e2a3e;padding:1px 5px;border-radius:3px;font-size:12px">$1</code>');
+  s = s.replace(/(https?:\/\/[^\s<]+)/g,'<a href="$1" target="_blank" rel="noreferrer" style="color:var(--accent);text-decoration:none">$1</a>');
+  return s;
+}
+
+fetchData();
+// Update relative time display every minute
+setInterval(updateRefreshInfo, 60000);
+</script>
+</body>
+</html>
